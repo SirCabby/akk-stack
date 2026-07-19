@@ -12,7 +12,8 @@ OPS_DIR  ?= eqemu-ops
 DELEGATE  = @$(MAKE) --no-print-directory -C $(OPS_DIR)
 
 .PHONY: db-backup list-backups db-restore migrate-new migrate-up migrate-down migrate-status \
-        db-stage-upstream db-diff-report db-refresh-upstream db-clean-staging
+        db-stage-upstream db-diff-report db-refresh-upstream db-clean-staging \
+        db-stage-takp db-clean-takp
 
 db-backup: ##@db-ops Full DB snapshot -> eqemu-ops/backups/*.sql.gz
 	$(DELEGATE) db-backup
@@ -37,3 +38,8 @@ db-refresh-upstream: ##@db-ops Swap content from staging + replay migrations (DR
 	$(DELEGATE) db-refresh-upstream SCHEMA="$(SCHEMA)" DRY_RUN="$(DRY_RUN)" FORCE="$(FORCE)" REFRESH_SYSTEM="$(REFRESH_SYSTEM)"
 db-clean-staging: ##@db-ops Drop staging schema(s) (SCHEMA=peq_upstream default)
 	$(DELEGATE) db-clean-staging SCHEMA="$(SCHEMA)"
+
+db-stage-takp: ##@db-ops Load a TAKP alkabor dump into staging schema takp (FILE=<.tar.gz|.sql>)
+	$(DELEGATE) db-stage-takp FILE="$(FILE)" SCHEMA="$(SCHEMA)"
+db-clean-takp: ##@db-ops Drop the TAKP staging schema
+	$(DELEGATE) db-clean-takp SCHEMA="$(SCHEMA)"
