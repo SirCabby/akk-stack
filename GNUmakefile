@@ -13,7 +13,8 @@ DELEGATE  = @$(MAKE) --no-print-directory -C $(OPS_DIR)
 
 .PHONY: db-backup list-backups db-restore migrate-new migrate-up migrate-down migrate-status \
         db-stage-upstream db-diff-report db-refresh-upstream db-clean-staging \
-        db-stage-takp db-clean-takp
+        db-stage-takp db-clean-takp takp-map takp-generate takp-verify \
+        takp-rehearse takp-clean-rehearsal
 
 db-backup: ##@db-ops Full DB snapshot -> eqemu-ops/backups/*.sql.gz
 	$(DELEGATE) db-backup
@@ -43,3 +44,14 @@ db-stage-takp: ##@db-ops Load a TAKP alkabor dump into staging schema takp (FILE
 	$(DELEGATE) db-stage-takp FILE="$(FILE)" SCHEMA="$(SCHEMA)"
 db-clean-takp: ##@db-ops Drop the TAKP staging schema
 	$(DELEGATE) db-clean-takp SCHEMA="$(SCHEMA)"
+
+takp-map: ##@db-ops Build the TAKP import zone routing + npc match map (+ reports)
+	$(DELEGATE) takp-map
+takp-generate: ##@db-ops Emit the TAKP spawn-import dbmate migrations + reports
+	$(DELEGATE) takp-generate
+takp-verify: ##@db-ops TAKP import verification suite (SCHEMA=peq_rehearsal / MODE=baseline optional)
+	$(DELEGATE) takp-verify SCHEMA="$(SCHEMA)" MODE="$(MODE)"
+takp-rehearse: ##@db-ops Backup + restore into peq_rehearsal + apply pending migrations + verify
+	$(DELEGATE) takp-rehearse FILE="$(FILE)"
+takp-clean-rehearsal: ##@db-ops Drop the peq_rehearsal schema
+	$(DELEGATE) takp-clean-rehearsal
