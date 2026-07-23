@@ -4,6 +4,7 @@
 # when you sync akk-stack upstream). Run from the akk-stack dir like any other target:
 #
 #   make db-backup | list-backups | db-restore FILE=backups/<name>.sql.gz
+#   make devsync [DRY_RUN=1] [FORCE=1]   (pull live's player/account data into dev)
 #   make migrate-new NAME=<desc> | migrate-up | migrate-down | migrate-status
 #   make db-stage-upstream PKG=<id> | db-diff-report | db-refresh-upstream | db-clean-staging
 include Makefile
@@ -11,7 +12,7 @@ include Makefile
 OPS_DIR  ?= eqemu-ops
 DELEGATE  = @$(MAKE) --no-print-directory -C $(OPS_DIR)
 
-.PHONY: db-backup list-backups db-restore migrate-new migrate-up migrate-down migrate-status \
+.PHONY: db-backup list-backups db-restore devsync migrate-new migrate-up migrate-down migrate-status \
         migrate-exp-new migrate-exp-up migrate-exp-down migrate-exp-status migrate-promote migrate-rebaseline \
         db-replay-restore db-replay-up db-replay-compare db-replay-clean \
         db-stage-upstream db-diff-report db-refresh-upstream db-clean-staging \
@@ -24,6 +25,8 @@ list-backups: ##@db-ops List saved DB backups
 	$(DELEGATE) list-backups
 db-restore: ##@db-ops Restore a dump (make db-restore FILE=backups/<name>.sql.gz)
 	$(DELEGATE) db-restore FILE="$(FILE)"
+devsync: ##@db-ops Overwrite dev player/account tables with the live stack's (DRY_RUN=1 / FORCE=1)
+	$(DELEGATE) db-sync-players DRY_RUN="$(DRY_RUN)" FORCE="$(FORCE)"
 migrate-new: ##@db-ops New migration (make migrate-new NAME=short_desc)
 	$(DELEGATE) migrate-new NAME="$(NAME)"
 migrate-up: ##@db-ops Apply pending migrations
