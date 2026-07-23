@@ -23,6 +23,15 @@ make migrate-status                       # verify applied / pending
 make migrate-down                         # roll back the most recent migration
 ```
 
+**Two channels.** `db/migrations/` is the CANONICAL history — every server (dev + the
+future live server) replays it, so only proven, permanent changes belong there.
+Tests/tuning trials go in the dev-only EXPERIMENTS channel (`db/experiments/`, separate
+ledger): `make migrate-exp-new NAME=... / migrate-exp-up / migrate-exp-down /
+migrate-exp-status`. Graduate a proven experiment with
+`make migrate-promote FILE=db/experiments/<file>.sql`; discard with `migrate-exp-down` +
+delete. When a change is exploratory or you're not sure it will stick, default to the
+experiments channel. Full model: `eqemu-ops/docs/dev-to-live.md`.
+
 Conventions (full list in `eqemu-ops/README.md`):
 - **Always write the `down` section** so every change is reversible.
 - For `rule_values` use `INSERT ... ON DUPLICATE KEY UPDATE` (PK is `(ruleset_id, rule_name)`;

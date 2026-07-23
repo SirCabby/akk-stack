@@ -9,3 +9,5 @@ eqemu-ops/
 .dropbox_uploader
 .bash_history
 assets/ssh/
+# machine-local compose tweaks (dev disables fail2ban here; live has no override)
+docker-compose.override.yml
