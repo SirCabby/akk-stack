@@ -112,6 +112,9 @@ services:
       - F2B_MAX_RETRY=3
       - F2B_ACTION=%(action_)s
       - F2B_IPTABLES_CHAIN=DOCKER-USER
+      # skip the entrypoint's `iptables -L` autodetect probe — with host networking it
+      # reverse-DNS-resolves every address in the host ruleset and never completes
+      - IPTABLES_MODE=nft
       - TZ=${TZ:-US/Central}
     volumes:
       - /etc/localtime:/etc/localtime:ro
@@ -132,6 +135,8 @@ services:
       - F2B_MAX_RETRY=3
       - F2B_ACTION=%(action_)s
       - F2B_IPTABLES_CHAIN=DOCKER-USER
+      # skip the entrypoint's `iptables -L` autodetect probe (see fail2ban-server)
+      - IPTABLES_MODE=nft
       - TZ=${TZ:-US/Central}
     volumes:
       - /etc/localtime:/etc/localtime:ro
