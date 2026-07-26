@@ -86,5 +86,5 @@ takp-clean-rehearsal: ##@db-ops Drop the peq_rehearsal schema
 .PHONY: client-build client-package
 client-build: ##@client-ops Rebuild the RoF2 client overlay (eqemu-ops/client-pack/build)
 	$(DELEGATE) client-build
-client-package: ##@client-ops Rebuild + package the RoF2 client overlay (client-pack/dist/client-zones-pack.zip)
+client-package: ##@client-ops Rebuild + package the RoF2 client overlay (client-pack/dist/cabby-pack.zip)
 	$(DELEGATE) client-package
