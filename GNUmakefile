@@ -12,13 +12,15 @@ include Makefile
 OPS_DIR  ?= eqemu-ops
 DELEGATE  = @$(MAKE) --no-print-directory -C $(OPS_DIR)
 
-.PHONY: db-backup list-backups db-restore devsync migrate-new migrate-up migrate-down migrate-status \
+.PHONY: allaclone-refresh db-backup list-backups db-restore devsync migrate-new migrate-up migrate-down migrate-status \
         migrate-exp-new migrate-exp-up migrate-exp-down migrate-exp-status migrate-promote migrate-rebaseline \
         db-replay-restore db-replay-up db-replay-compare db-replay-clean \
         db-stage-upstream db-diff-report db-refresh-upstream db-clean-staging \
         db-stage-takp db-clean-takp takp-map takp-generate takp-verify \
         takp-rehearse takp-clean-rehearsal
 
+allaclone-refresh: ##@db-ops Reindex quests + clear cached pages in the allaclone browser (runs itself after migrate-up)
+	$(DELEGATE) allaclone-refresh
 db-backup: ##@db-ops Full DB snapshot -> eqemu-ops/backups/*.sql.gz
 	$(DELEGATE) db-backup
 list-backups: ##@db-ops List saved DB backups
