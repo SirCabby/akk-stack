@@ -51,3 +51,32 @@ memory — run `#reload rules` in-game (as GM) or restart the stack for changes 
 > This policy is enforced by a PreToolUse hook (`.claude/hooks/enforce-dbmate.sh`) that
 > blocks direct DB-mutating shell commands. If it ever blocks something legitimate, author
 > the change as a migration rather than working around the hook.
+
+## `make install` at a stack root is a DESTRUCTIVE REINSTALL — never run it
+
+`install` is a target name shared by two very different Makefiles:
+
+| where | what `make install` does |
+|---|---|
+| `eqemu-ops/client-pack/<mod>/` | deploys that client mod — safe, the usual intent |
+| an akk-stack **root** (dev or live) | **full-stack reinstall** |
+
+The root target chains to `docker exec eqemu-server make install`, which runs
+`pull-eqemu-code → … → init-build → init-peq-database → init-loginserver`. On 2026-07-28 this
+**wiped dev's player tables** (`account`, `character_data`, `character_currency`, `inventory`,
+`character_bind` → 0) and `rm -rf build` destroyed the ninja build dir, replacing `bin/zone`
+with a binary containing none of the custom server code. Content and dbmate migrations survived;
+player data did not.
+
+**The cwd is not stable between tool calls**, so a bare `make install` can silently resolve
+against the root Makefile. Always scope it: **`make -C eqemu-ops/client-pack/<mod> install`**.
+
+Rebuild the server with
+`docker exec akk-stack-eqemu-server-1 bash -lc "cd /home/eqemu/code/build && ninja"` — never with
+a `make init-*` target. (`make init-dev-build` is the one exception: it restores the ninja build
+config and touches no data.)
+
+> Enforced by `.claude/hooks/block-stack-reinstall.sh`, which denies root `make install`,
+> `make init-*`, and volume-destroying `docker compose down -v` / `docker volume rm`, and asks
+> before `make devsync` (a wholesale player-table overwrite). Do not work around it — if it
+> blocks something legitimate, scope the command properly instead.

@@ -8,6 +8,11 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/enforce-dbmate.sh\"",
             "statusMessage": "Checking DB-change policy (dbmate)..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-stack-reinstall.sh\"",
+            "statusMessage": "Checking for destructive stack-reinstall commands..."
           }
         ]
       }
