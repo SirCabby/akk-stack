@@ -6,6 +6,7 @@
 #   make db-backup | list-backups | db-restore FILE=backups/<name>.sql.gz
 #   make devsync [DRY_RUN=1] [FORCE=1]   (pull live's player/account data into dev)
 #   make migrate-new NAME=<desc> | migrate-up | migrate-down | migrate-status
+#   make migrate-live-new NAME=<desc> | migrate-live-up   (live-only channel; up is gated to the live stack)
 #   make db-stage-upstream PKG=<id> | db-diff-report | db-refresh-upstream | db-clean-staging
 include Makefile
 
@@ -14,6 +15,7 @@ DELEGATE  = @$(MAKE) --no-print-directory -C $(OPS_DIR)
 
 .PHONY: allaclone-refresh db-backup list-backups db-restore devsync migrate-new migrate-up migrate-down migrate-status \
         migrate-exp-new migrate-exp-up migrate-exp-down migrate-exp-status migrate-promote migrate-rebaseline \
+        migrate-live-new migrate-live-up migrate-live-down migrate-live-status migrate-live-adopt \
         db-replay-restore db-replay-up db-replay-compare db-replay-clean \
         db-stage-upstream db-diff-report db-refresh-upstream db-clean-staging \
         db-stage-takp db-clean-takp takp-map takp-generate takp-verify \
@@ -50,6 +52,17 @@ migrate-promote: ##@db-ops Graduate an experiment to canonical (make migrate-pro
 	$(DELEGATE) migrate-promote FILE="$(FILE)"
 migrate-rebaseline: ##@db-ops Rewrite the migrations ledger to match db/migrations (CONFIRM=rebaseline)
 	$(DELEGATE) migrate-rebaseline CONFIRM="$(CONFIRM)" DB_NAME="$(DB_NAME)"
+
+migrate-live-new: ##@db-ops New LIVE-ONLY migration (make migrate-live-new NAME=short_desc) — author on dev
+	$(DELEGATE) migrate-live-new NAME="$(NAME)"
+migrate-live-up: ##@db-ops Apply pending live-only migrations (LIVE STACK ONLY)
+	$(DELEGATE) migrate-live-up
+migrate-live-down: ##@db-ops Roll back the most recent live-only migration (LIVE STACK ONLY)
+	$(DELEGATE) migrate-live-down
+migrate-live-status: ##@db-ops Show applied / pending live-only migrations
+	$(DELEGATE) migrate-live-status
+migrate-live-adopt: ##@db-ops Move already-applied db/live versions into the schema_live ledger (LIVE STACK ONLY)
+	$(DELEGATE) migrate-live-adopt
 
 db-replay-restore: ##@db-ops Restore a backup into a scratch schema (SCHEMA= FILE=)
 	$(DELEGATE) db-replay-restore SCHEMA="$(SCHEMA)" FILE="$(FILE)"

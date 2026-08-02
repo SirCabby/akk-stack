@@ -23,14 +23,33 @@ make migrate-status                       # verify applied / pending
 make migrate-down                         # roll back the most recent migration
 ```
 
-**Two channels.** `db/migrations/` is the CANONICAL history — every server (dev + the
-future live server) replays it, so only proven, permanent changes belong there.
+**Three channels.** `db/migrations/` is the CANONICAL history — every server (dev + live)
+replays it, so only proven, permanent changes belong there.
+
 Tests/tuning trials go in the dev-only EXPERIMENTS channel (`db/experiments/`, separate
 ledger): `make migrate-exp-new NAME=... / migrate-exp-up / migrate-exp-down /
 migrate-exp-status`. Graduate a proven experiment with
 `make migrate-promote FILE=db/experiments/<file>.sql`; discard with `migrate-exp-down` +
 delete. When a change is exploratory or you're not sure it will stick, default to the
-experiments channel. Full model: `eqemu-ops/docs/dev-to-live.md`.
+experiments channel.
+
+Schema that is only meaningful on the **live host** (the peq-editor's `peq_admin` table,
+cleanup of artifacts left by live-only services) goes in the live-only LIVE channel
+(`db/live/`, ledger `schema_live`): `make migrate-live-new NAME=... / migrate-live-up /
+migrate-live-down / migrate-live-status`. It is the mirror image of experiments —
+experiments never reach live, live-channel files never reach dev — and `make migrate-up`
+on either server touches neither.
+
+> **Author live-channel files on DEV.** `migrate-live-up` / `-down` / `-adopt` are gated
+> by the `require-live` target and refuse to run unless the parent stack dir is
+> `akk-stack-live`. Authoring belongs on dev because live's git origin is dev's
+> checked-out working tree, so a commit made on live cannot be pushed and strands as an
+> untracked file. Flow: write on dev → commit + push → `git pull` on live →
+> `make migrate-live-up` there.
+
+**Never put a credential in any migration** — they are committed and replay everywhere.
+Ship the upstream default and set the real per-host secret out-of-band; host-specific
+*settings* belong in `.env`. Full model: `eqemu-ops/docs/dev-to-live.md`.
 
 Conventions (full list in `eqemu-ops/README.md`):
 - **Always write the `down` section** so every change is reversible.
