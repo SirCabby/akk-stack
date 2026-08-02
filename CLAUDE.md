@@ -82,6 +82,57 @@ memory — run `#reload rules` in-game (as GM) or restart the stack for changes 
 > blocks direct DB-mutating shell commands. If it ever blocks something legitimate, author
 > the change as a migration rather than working around the hook.
 
+## Every change ships to LIVE — never leave the two stacks diverged
+
+Two stacks run on this box: **dev** (`~/workspace/GitHub/akk-stack`, LAN `.3`) and **live**
+(`~/workspace/GitHub/akk-stack-live`, LAN `.7`, **real players**). Once a change is applied
+and verified on dev, propagate it to live **in the same session**, before reporting the work
+done. This is standing authorization for the `git commit` + `git push` the propagation
+requires — don't stop to ask for those.
+
+Live's `origin` for all four repos is dev's checked-out working tree, so **uncommitted work
+cannot reach live**. Commit each nested repo the change touched (`git add` explicitly — a new
+migration file is untracked and `commit -a` will silently skip it):
+
+```bash
+# on DEV — only the repos the change actually touched
+git -C eqemu-ops   add db/migrations/<file>.sql && git -C eqemu-ops   commit -m "..." && git -C eqemu-ops   push
+git -C server/quests add <files>              && git -C server/quests commit -m "..." && git -C server/quests push
+git -C code        add <files>                && git -C code        commit -m "..." && git -C code        push
+git add <files>                               && git commit -m "..."                 && git push   # stack scaffold
+
+# then on LIVE
+cd ~/workspace/GitHub/akk-stack-live
+git pull && git -C eqemu-ops pull && git -C server/quests pull && git -C code pull
+make migrate-up && make migrate-status        # expect: 0 pending
+```
+
+**Never ships to live:** anything in `db/experiments/` (never run `migrate-exp-*` in the live
+checkout), and dev's `.env` / `eqemu_config.json` / `login.json` — live has its own passwords
+and keys. `db/live/` is the mirror image: authored on dev, applied only on live.
+
+**Then make it take effect — check who is online FIRST:**
+
+```bash
+docker exec akk-stack-live-eqemu-server-1 bash -lc \
+  '{ printf "who\n"; sleep 3; printf "quit\n"; } | telnet 127.0.0.1 9000'
+```
+
+| change | activation | who it disconnects |
+|---|---|---|
+| rules, loot, doors, merchants, content flags, quests | in-game `#reload <type>` as GM | nobody |
+| spawns / other zone-boot content | console `zoneshutdown <zone>`, or `make restart` | that zone / everyone |
+| spells, items (shared memory), server code | rebuild + `make restart` | everyone |
+
+The world console has **no** granular reload — only `reloadworld` / `reloadzonequests`. So the
+`#reload <type>` step belongs to the user in-game: state explicitly which command to run. If
+players are online and the change needs `make restart`, **ask first** and `broadcast` a warning.
+
+Server code rebuilds inside live's own container — never copy dev's binaries:
+`docker exec akk-stack-live-eqemu-server-1 bash -c 'cd /home/eqemu/code && cmake --build build'`
+
+Full runbook (IPs, router forwards, backups, onboarding): `eqemu-ops/docs/live-local-runbook.md`.
+
 ## `make install` at a stack root is a DESTRUCTIVE REINSTALL — never run it
 
 `install` is a target name shared by two very different Makefiles:
