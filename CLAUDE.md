@@ -62,7 +62,18 @@ Conventions (full list in `eqemu-ops/README.md`):
   re-setting a value another migration already owns.
 
 **Read-only** inspection queries (`SELECT` / `SHOW` / `DESCRIBE` via `mysql -e`, and
-`mysqldump` backups) are fine and do **not** need a migration.
+`mysqldump` backups) are fine and do **not** need a migration. Note the hook also blocks
+read-only calls that use shell **redirection** (`> file`, `diff <(...)`) — aggregate in SQL
+instead of piping output to files.
+
+**Player/runtime data is ops territory, not migrations.** Inline DML (`INSERT` / `UPDATE` /
+`DELETE` / `REPLACE` via `mysql -e`) is allowed WITHOUT a migration when **every** target
+table is listed in `eqemu-ops/db/player-tables.txt` (`account`, `character_*`, guilds,
+corpses, ...). That covers GM/ops actions like moving a stuck character or fixing a
+corrupt buff row — state that is captured by `make db-backup` and must never replay onto
+another server. Write plain unquoted table names so the hook can verify targets. Schema
+changes (`ALTER`/`CREATE`/`DROP`/`TRUNCATE`) still require a migration even on player
+tables, and piping `.sql` files into the container stays blocked.
 
 After applying a migration, the running world/zone processes still hold the old rules in
 memory — run `#reload rules` in-game (as GM) or restart the stack for changes to take effect.

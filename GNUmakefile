@@ -13,7 +13,24 @@ include Makefile
 OPS_DIR  ?= eqemu-ops
 DELEGATE  = @$(MAKE) --no-print-directory -C $(OPS_DIR)
 
-.PHONY: allaclone-refresh db-backup list-backups db-restore devsync migrate-new migrate-up migrate-down migrate-status \
+# Which stack is this checkout? Same signal eqemu-ops/Makefile uses to pick the DB
+# container/network: the directory name. Targets that only make sense on one stack gate on
+# it rather than being deleted from the other stack's copy — a guard gives a reason, a
+# deletion gives "No rule to make target" and leaves the two checkouts permanently forked.
+STACK_NAME      ?= $(notdir $(CURDIR))
+LIVE_STACK_NAME ?= akk-stack-live
+
+# devsync overwrites THIS stack's player tables from live, and the client pack is built and
+# published from dev. Both are dev-side operations; on live they are at best pointless and
+# at worst destructive (on live, devsync's default source is live itself).
+refuse-on-live:
+	@test "$(STACK_NAME)" != "$(LIVE_STACK_NAME)" || { \
+	  printf '>> refusing: `make %s` is a DEV-stack target and must not run on the live stack.\n' "$(MAKECMDGOALS)"; \
+	  printf '>>   this stack: %s\n' "$(STACK_NAME)"; \
+	  printf '>>   run it from the dev checkout instead (~/workspace/GitHub/akk-stack).\n'; \
+	  exit 1; }
+
+.PHONY: refuse-on-live allaclone-refresh db-backup list-backups db-restore devsync migrate-new migrate-up migrate-down migrate-status \
         migrate-exp-new migrate-exp-up migrate-exp-down migrate-exp-status migrate-promote migrate-rebaseline \
         migrate-live-new migrate-live-up migrate-live-down migrate-live-status migrate-live-adopt \
         db-replay-restore db-replay-up db-replay-compare db-replay-clean \
@@ -29,7 +46,7 @@ list-backups: ##@db-ops List saved DB backups
 	$(DELEGATE) list-backups
 db-restore: ##@db-ops Restore a dump (make db-restore FILE=backups/<name>.sql.gz)
 	$(DELEGATE) db-restore FILE="$(FILE)"
-devsync: ##@db-ops Overwrite dev player/account tables with the live stack's (DRY_RUN=1 / FORCE=1)
+devsync: refuse-on-live ##@db-ops Overwrite dev player/account tables with the live stack's (DRY_RUN=1 / FORCE=1)
 	$(DELEGATE) db-sync-players DRY_RUN="$(DRY_RUN)" FORCE="$(FORCE)"
 migrate-new: ##@db-ops New migration (make migrate-new NAME=short_desc)
 	$(DELEGATE) migrate-new NAME="$(NAME)"
@@ -99,8 +116,8 @@ takp-clean-rehearsal: ##@db-ops Drop the peq_rehearsal schema
 	$(DELEGATE) takp-clean-rehearsal
 
 .PHONY: client-build client-package package
-client-build: ##@client-ops Rebuild the RoF2 client overlay (eqemu-ops/client-pack/build)
+client-build: refuse-on-live ##@client-ops Rebuild the RoF2 client overlay (eqemu-ops/client-pack/build)
 	$(DELEGATE) client-build
-client-package: ##@client-ops Rebuild + package the RoF2 client overlay (client-pack/dist/cabby-pack.zip)
+client-package: refuse-on-live ##@client-ops Rebuild + package the RoF2 client overlay (client-pack/dist/cabby-pack.zip)
 	$(DELEGATE) client-package
 package: client-package ##@client-ops Alias for client-package

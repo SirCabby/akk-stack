@@ -20,6 +20,11 @@ export
 else
 endif
 
+# Published port for the PEQ editor proxy. Defaulted here (and in docker-compose.yml) so a
+# stack that enables ENABLE_PEQ_EDITOR without setting the port still prints a usable URL --
+# the two stacks on this box need different ports to coexist.
+PEQ_EDITOR_PORT ?= 8081
+
 #----------------------
 # docker-sync context
 #----------------------
@@ -223,6 +228,24 @@ watch-processes: ##@workflow Watch processes
 up: ##@docker Bring up eqemu-server and database
 	COMPOSE_HTTP_TIMEOUT=1000 $(DOCKER) up -d eqemu-server mariadb $(RUN_SERVICES)
 	make up-info
+	make server-status
+
+# Containers coming up says nothing about which binaries the Spire launcher spawned --
+# those are gated by web-admin.launcher.* in server/eqemu_config.json (gitignored, so it
+# drifts per host). A false runLoginserver there means nobody can log in or create an
+# account while `make up` still looks perfectly healthy. Surface it instead.
+server-status: ##@info Report which eqemu server processes are actually running
+	@echo "> Server Processes"
+	@echo "----------------------------------"
+	@for proc in world loginserver ucs; do \
+		if $(DOCKER) exec -T eqemu-server bash -c "pgrep -f 'bin/$$proc' >/dev/null 2>&1"; then \
+			echo "> $$proc  OK"; \
+		else \
+			echo "> $$proc  NOT RUNNING -- check web-admin.launcher.run* in server/eqemu_config.json"; \
+		fi; \
+	done
+	@echo "> zones running: $$($(DOCKER) exec -T eqemu-server bash -c "pgrep -fc 'bin/zone'" 2>/dev/null || echo 0)"
+	@echo "----------------------------------"
 
 down: ##@docker Down all containers
 	COMPOSE_HTTP_TIMEOUT=1000 $(DOCKER) down --timeout 3
@@ -265,13 +288,19 @@ info: ##@info Print install info
 	@echo "----------------------------------"
 	@cat .env | grep IP
 	@echo "----------------------------------"
+ifeq ("$(ENABLE_FTP_QUESTS)", "true")
 	@echo "> Quests FTP  | ${IP_ADDRESS}:21 | quests / ${FTP_QUESTS_PASSWORD}"
+endif
 	@echo "----------------------------------"
 	@echo "> Web Interfaces"
 	@echo "----------------------------------"
-	@echo "> PEQ Editor (proxy)  | http://${IP_ADDRESS}:8081 | ${PEQ_EDITOR_PROXY_USERNAME} / ${PEQ_EDITOR_PROXY_PASSWORD}"
-	@echo "> PEQ Editor (app)    | http://${IP_ADDRESS}:8081 | admin / ${PEQ_EDITOR_PASSWORD}"
+ifeq ("$(ENABLE_PEQ_EDITOR)", "true")
+	@echo "> PEQ Editor (proxy)  | http://${IP_ADDRESS}:$(PEQ_EDITOR_PORT) | ${PEQ_EDITOR_PROXY_USERNAME} / ${PEQ_EDITOR_PROXY_PASSWORD}"
+	@echo "> PEQ Editor (app)    | http://${IP_ADDRESS}:$(PEQ_EDITOR_PORT) | admin / ${PEQ_EDITOR_PASSWORD}"
+endif
+ifeq ("$(ENABLE_PHPMYADMIN)", "true")
 	@echo "> PhpMyAdmin          | http://${IP_ADDRESS}:8082 | admin / ${PHPMYADMIN_PASSWORD}"
+endif
 	@echo "> EQEmu Admin (spire) | http://${IP_ADDRESS}:3000 | admin / $(shell $(DOCKER) exec -T eqemu-server bash -c "cat ~/server/eqemu_config.json | jq '.[\"web-admin\"].application.admin.password'")"
 ifeq ("$(SPIRE_DEV)", "true")
 	@echo "----------------------------------"
@@ -284,8 +313,12 @@ up-info: ##@info Shows web interfaces during make up
 	@echo "----------------------------------"
 	@echo "> Web Interfaces"
 	@echo "----------------------------------"
-	@echo "> PEQ Editor          | http://${IP_ADDRESS}:8081"
+ifeq ("$(ENABLE_PEQ_EDITOR)", "true")
+	@echo "> PEQ Editor          | http://${IP_ADDRESS}:$(PEQ_EDITOR_PORT)"
+endif
+ifeq ("$(ENABLE_PHPMYADMIN)", "true")
 	@echo "> PhpMyAdmin          | http://${IP_ADDRESS}:8082"
+endif
 	@echo "> EQEmu Admin (spire) | http://${IP_ADDRESS}:3000"
 ifeq ("$(SPIRE_DEV)", "true")
 	@echo "----------------------------------"
