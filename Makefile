@@ -278,7 +278,12 @@ info: ##@info Print install info
 	@echo "----------------------------------"
 	@echo "> Server Info"
 	@echo "----------------------------------"
-	@echo '> $(shell $(DOCKER) exec -T eqemu-server bash -c "cat ~/server/eqemu_config.json | jq '.server.world.longname' | tr -d '\"'")'
+	@# Read the name in the RECIPE, not via $(shell) at parse time: the old form ran a
+	@# docker exec on every single make invocation, and interpolated the result into a
+	@# single-quoted echo -- so a server name containing an apostrophe ("Cabby's Live
+	@# Server") produced `/bin/sh: unexpected EOF while looking for matching '`. jq -r
+	@# also replaces the tr -d '\"' quote-stripping hack.
+	@$(DOCKER) exec -T eqemu-server bash -c "cat ~/server/eqemu_config.json | jq -r '.server.world.longname'" 2>/dev/null | sed 's/^/> /' || echo "> (server container not running)"
 	@echo "----------------------------------"
 	@echo "> Passwords"
 	@echo "----------------------------------"
