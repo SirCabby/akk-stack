@@ -8,7 +8,31 @@
 #   make migrate-new NAME=<desc> | migrate-up | migrate-down | migrate-status
 #   make migrate-live-new NAME=<desc> | migrate-live-up   (live-only channel; up is gated to the live stack)
 #   make db-stage-upstream PKG=<id> | db-diff-report | db-refresh-upstream | db-clean-staging
-include Makefile
+
+# ---------------------------------------------------------------------------------------
+# Upstream Makefile include.
+#
+# A few of its informational targets need per-stack behavior (PEQ editor port, the ENABLE_*
+# toggles, a server name containing an apostrophe). Simply redefining a target that
+# `include Makefile` already defined works, but makes GNU make print
+#     GNUmakefile:N: warning: overriding recipe for target 'info'
+#     Makefile:N: warning: ignoring old recipe for target 'info'
+# on EVERY invocation, including unrelated targets. So the upstream copy is included with
+# those targets RENAMED to `upstream-<name>`: make never sees two recipes for one target,
+# no warnings, and the originals stay runnable (`make upstream-info`) for comparison.
+#
+# The point is that Makefile itself stays byte-identical to upstream, so syncing akk-stack
+# upstream never conflicts. Keep it that way — put stack-local changes HERE, not there.
+# (The rename also drops the `##@` help text from the originals so `make help` lists each
+# target once, ours.)
+OVERRIDE_TARGETS := info up-info
+UPSTREAM_MK      := .upstream.mk
+$(shell sed $(foreach t,$(OVERRIDE_TARGETS),-e 's|^$(t):.*|upstream-$(t):|') Makefile > $(UPSTREAM_MK).tmp && mv -f $(UPSTREAM_MK).tmp $(UPSTREAM_MK))
+include $(UPSTREAM_MK)
+
+# Published port for the PEQ editor proxy (docker-compose.yml defaults to the same value).
+# `?=` so a stack's .env wins — the two stacks on this box need different ports to coexist.
+PEQ_EDITOR_PORT ?= 8081
 
 OPS_DIR  ?= eqemu-ops
 DELEGATE  = @$(MAKE) --no-print-directory -C $(OPS_DIR)
@@ -114,6 +138,92 @@ takp-rehearse: ##@db-ops Backup + restore into peq_rehearsal + apply pending mig
 	$(DELEGATE) takp-rehearse FILE="$(FILE)"
 takp-clean-rehearsal: ##@db-ops Drop the peq_rehearsal schema
 	$(DELEGATE) takp-clean-rehearsal
+
+#----------------------
+# Stack-local overrides of upstream informational targets (see OVERRIDE_TARGETS above).
+# The upstream originals remain as `make upstream-info` / `make upstream-up-info`.
+#----------------------
+.PHONY: server-status info up-info
+
+# Containers being up says nothing about which binaries Spire's launcher actually spawned --
+# those are gated by web-admin.launcher.run* in server/eqemu_config.json, which is gitignored
+# and drifts per host. A false runLoginserver there means nobody can log in or create an
+# account while `make up` still looks perfectly healthy. Surface it instead of hiding it.
+server-status: ##@info Report which eqemu server processes are actually running
+	@echo "> Server Processes"
+	@echo "----------------------------------"
+	@for proc in world loginserver ucs; do \
+		if $(DOCKER) exec -T eqemu-server bash -c "pgrep -f 'bin/$$proc' >/dev/null 2>&1"; then \
+			echo "> $$proc  OK"; \
+		else \
+			echo "> $$proc  NOT RUNNING -- check web-admin.launcher.run* in server/eqemu_config.json"; \
+		fi; \
+	done
+	@echo "> zones running: $$($(DOCKER) exec -T eqemu-server bash -c "pgrep -fc 'bin/zone'" 2>/dev/null || echo 0)"
+	@echo "----------------------------------"
+
+info: ##@info Print install info
+	@echo "----------------------------------"
+	@echo "> Server Info"
+	@echo "----------------------------------"
+	@# Read the name in the RECIPE, not via $$(shell) at parse time: upstream's form ran a
+	@# docker exec on every make invocation and interpolated the result into a SINGLE-quoted
+	@# echo, so a name containing an apostrophe ("Cabby's Live Server") broke the shell with
+	@# `unexpected EOF while looking for matching '`. jq -r also replaces its tr -d '\"' hack.
+	@$(DOCKER) exec -T eqemu-server bash -c "cat ~/server/eqemu_config.json | jq -r '.server.world.longname'" 2>/dev/null | sed 's/^/> /' || echo "> (server container not running)"
+	@echo "----------------------------------"
+	@echo "> Passwords"
+	@echo "----------------------------------"
+	@cat .env | grep PASSWORD
+	@echo "----------------------------------"
+	@echo "> IP"
+	@echo "----------------------------------"
+	@cat .env | grep IP
+	@echo "----------------------------------"
+ifeq ("$(ENABLE_FTP_QUESTS)", "true")
+	@echo "> Quests FTP  | ${IP_ADDRESS}:21 | quests / ${FTP_QUESTS_PASSWORD}"
+	@echo "----------------------------------"
+endif
+	@echo "> Web Interfaces"
+	@echo "----------------------------------"
+ifeq ("$(ENABLE_PEQ_EDITOR)", "true")
+	@echo "> PEQ Editor (proxy)  | http://${IP_ADDRESS}:$(PEQ_EDITOR_PORT) | ${PEQ_EDITOR_PROXY_USERNAME} / ${PEQ_EDITOR_PROXY_PASSWORD}"
+	@echo "> PEQ Editor (app)    | http://${IP_ADDRESS}:$(PEQ_EDITOR_PORT) | admin / ${PEQ_EDITOR_PASSWORD}"
+endif
+ifeq ("$(ENABLE_PHPMYADMIN)", "true")
+	@echo "> PhpMyAdmin          | http://${IP_ADDRESS}:8082 | admin / ${PHPMYADMIN_PASSWORD}"
+endif
+	@echo "> EQEmu Admin (spire) | http://${IP_ADDRESS}:3000 | admin / $(shell $(DOCKER) exec -T eqemu-server bash -c "cat ~/server/eqemu_config.json | jq '.[\"web-admin\"].application.admin.password'")"
+ifeq ("$(SPIRE_DEV)", "true")
+	@echo "----------------------------------"
+	@echo "> Spire Backend Development  | http://${IP_ADDRESS}:3010 | "
+	@echo "> Spire Frontend Development | http://${IP_ADDRESS}:8080 | "
+endif
+	@echo "----------------------------------"
+
+# `make up` calls `make up-info` as a sub-make, which re-parses this file and so gets THIS
+# recipe. Appending server-status here is why `up` itself needs no override — leaving that
+# target pristine keeps the one recipe that actually starts the stack upstream-owned.
+up-info: ##@info Shows web interfaces during make up
+	@echo "----------------------------------"
+	@echo "> Web Interfaces"
+	@echo "----------------------------------"
+ifeq ("$(ENABLE_PEQ_EDITOR)", "true")
+	@echo "> PEQ Editor          | http://${IP_ADDRESS}:$(PEQ_EDITOR_PORT)"
+endif
+ifeq ("$(ENABLE_PHPMYADMIN)", "true")
+	@echo "> PhpMyAdmin          | http://${IP_ADDRESS}:8082"
+endif
+	@echo "> EQEmu Admin (spire) | http://${IP_ADDRESS}:3000"
+ifeq ("$(SPIRE_DEV)", "true")
+	@echo "----------------------------------"
+	@echo "> Spire Backend Development  | http://${IP_ADDRESS}:3010"
+	@echo "> Spire Frontend Development | http://${IP_ADDRESS}:8080"
+endif
+	@echo "----------------------------------"
+	@echo "Use 'make info' to see passwords"
+	@echo "----------------------------------"
+	@$(MAKE) --no-print-directory server-status
 
 .PHONY: client-build client-package package
 client-build: refuse-on-live ##@client-ops Rebuild the RoF2 client overlay (eqemu-ops/client-pack/build)
