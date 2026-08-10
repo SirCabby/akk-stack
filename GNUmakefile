@@ -62,7 +62,7 @@ refuse-on-live:
         db-stage-takp db-clean-takp takp-map takp-generate takp-verify \
         takp-rehearse takp-clean-rehearsal
 
-allaclone-refresh: ##@db-ops Reindex quests + clear cached pages in the allaclone browser (runs itself after migrate-up)
+allaclone-refresh: ##@db-ops Rebuild allaclone's quest index + item eras + page cache (runs itself after migrate-up)
 	$(DELEGATE) allaclone-refresh
 db-backup: ##@db-ops Full DB snapshot -> eqemu-ops/backups/*.sql.gz
 	$(DELEGATE) db-backup
