@@ -8,6 +8,7 @@
 #   make migrate-new NAME=<desc> | migrate-up | migrate-down | migrate-status
 #   make migrate-live-new NAME=<desc> | migrate-live-up   (live-only channel; up is gated to the live stack)
 #   make db-stage-upstream PKG=<id> | db-diff-report | db-refresh-upstream | db-clean-staging
+#   make quests-sync-clones | quests-check-clones   (quest scripts for the *_classic zone clones)
 
 # ---------------------------------------------------------------------------------------
 # Upstream Makefile include.
@@ -224,6 +225,12 @@ endif
 	@echo "Use 'make info' to see passwords"
 	@echo "----------------------------------"
 	@$(MAKE) --no-print-directory server-status
+
+.PHONY: quests-sync-clones quests-check-clones
+quests-sync-clones: ##@quest-ops Refresh the *_classic clone quest-script symlinks
+	$(DELEGATE) quests-sync-clones
+quests-check-clones: ##@quest-ops Report drift in the *_classic clone quest-script symlinks (exit 1 if stale)
+	$(DELEGATE) quests-check-clones
 
 .PHONY: client-build client-package package
 client-build: refuse-on-live ##@client-ops Rebuild the RoF2 client overlay (eqemu-ops/client-pack/build)
